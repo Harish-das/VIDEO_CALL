@@ -147,10 +147,48 @@
         }
 
         function rotateCamera() {
-            local_stream.getVideoTracks().forEach(track => {
-                track.applyConstraints({ facingMode: track.getSettings().facingMode === 'user' ? 'environment' : 'user' });
-            });
+    if (local_stream) {
+        const videoTracks = local_stream.getVideoTracks();
+        if (videoTracks.length > 0) {
+            const currentTrack = videoTracks[0];
+            const allDevices = [];
+
+            navigator.mediaDevices.enumerateDevices()
+                .then(devices => {
+                    devices.forEach(device => {
+                        if (device.kind === 'videoinput') {
+                            allDevices.push(device);
+                        }
+                    });
+
+                    const currentIndex = allDevices.findIndex(d => d.deviceId === currentTrack.getSettings().deviceId);
+
+                    if (currentIndex !== -1) {
+                        const nextIndex = (currentIndex + 1) % allDevices.length;
+                        const nextDevice = allDevices[nextIndex];
+
+                        const constraints = {
+                            video: { deviceId: { exact: nextDevice.deviceId } }
+                        };
+
+                        navigator.mediaDevices.getUserMedia(constraints)
+                            .then(newStream => {
+                                local_stream.getTracks().forEach(track => track.stop());
+                                local_stream = newStream;
+                                setLocalStream(local_stream);
+                            })
+                            .catch(err => {
+                                console.error('Error accessing new camera:', err);
+                            });
+                    }
+                })
+                .catch(err => {
+                    console.error('Error enumerating devices:', err);
+                });
         }
+    }
+}
+
     </script>
 </body>
 
