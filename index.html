@@ -1,10 +1,16 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 
-    <head>
-        <title>Bunique's server</title>
-        <link rel="stylesheet" type="text/css" href="styles.css">
-    </head>
-    <body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bunique's Server</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
         <h1 class="title">Bunique's Server</h1>
         <p id="notification" hidden></p>
         <div class="entry-modal" id="entry-modal">
@@ -21,10 +27,131 @@
 
             <!-- Local Video Element-->
             <video id="local-video"></video>
+            <div class="controls">
+                <button id="muteButton" onclick="toggleMute()">Mute</button>
+                <button id="endCallButton" onclick="endCall()">End Call</button>
+                <button id="rotateCameraButton" onclick="rotateCamera()">Rotate Camera</button>
+            </div>
         </div>
-    </body>
+    </div>
 
-    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
-    <script src="script.js"></script>
+    <script>
+        const PRE = "DELTA"
+        const SUF = "MEET"
+        var room_id;
+        var getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+        var local_stream;
+        var peer;
+
+        function createRoom() {
+            console.log("Creating Room")
+            let room = document.getElementById("room-input").value;
+            if (room == " " || room == "") {
+                alert("Please enter room number")
+                return;
+            }
+            room_id = PRE + room + SUF;
+            peer = new Peer(room_id)
+            peer.on('open', (id) => {
+                console.log("Peer Connected with ID: ", id)
+                hideModal()
+                getUserMedia({ video: true, audio: true }, (stream) => {
+                    local_stream = stream;
+                    setLocalStream(local_stream)
+                }, (err) => {
+                    console.log(err)
+                })
+                notify("Waiting for peer to join.")
+            })
+            peer.on('call', (call) => {
+                call.answer(local_stream);
+                call.on('stream', (stream) => {
+                    setRemoteStream(stream)
+                })
+            })
+        }
+
+        function setLocalStream(stream) {
+            let video = document.getElementById("local-video");
+            video.srcObject = stream;
+            video.muted = true;
+            video.play();
+        }
+
+        function setRemoteStream(stream) {
+            let video = document.getElementById("remote-video");
+            video.srcObject = stream;
+            video.play();
+        }
+
+        function hideModal() {
+            document.getElementById("entry-modal").hidden = true
+        }
+
+        function notify(msg) {
+            let notification = document.getElementById("notification")
+            notification.innerHTML = msg
+            notification.hidden = false
+            setTimeout(() => {
+                notification.hidden = true;
+            }, 3000)
+        }
+
+        function joinRoom() {
+            console.log("Joining Room")
+            let room = document.getElementById("room-input").value;
+            if (room == " " || room == "") {
+                alert("Please enter room number")
+                return;
+            }
+            room_id = PRE + room + SUF;
+            hideModal()
+            peer = new Peer()
+            peer.on('open', (id) => {
+                console.log("Connected with Id: " + id)
+                getUserMedia({ video: true, audio: true }, (stream) => {
+                    local_stream = stream;
+                    setLocalStream(local_stream)
+                    notify("Joining peer")
+                    let call = peer.call(room_id, stream)
+                    call.on('stream', (stream) => {
+                        setRemoteStream(stream);
+                    })
+                }, (err) => {
+                    console.log(err)
+                })
+
+            })
+        }
+
+        function toggleMute() {
+            local_stream.getAudioTracks().forEach(track => {
+                track.enabled = !track.enabled;
+            });
+        }
+
+        function endCall() {
+            if (local_stream) {
+                local_stream.getTracks().forEach(track => track.stop());
+            }
+
+            if (peer) {
+                peer.disconnect();
+            }
+
+            let video = document.getElementById("local-video");
+            video.srcObject = null;
+
+            video = document.getElementById("remote-video");
+            video.srcObject = null;
+        }
+
+        function rotateCamera() {
+            local_stream.getVideoTracks().forEach(track => {
+                track.applyConstraints({ facingMode: track.getSettings().facingMode === 'user' ? 'environment' : 'user' });
+            });
+        }
+    </script>
+</body>
 
 </html>
